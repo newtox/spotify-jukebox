@@ -74,4 +74,4 @@ Everyone who walks in hears the music, walking out stops it. Then pick "WorkAdve
 
 ## License
 
-MIT. librespot is MIT licensed, ffmpeg is LGPL/GPL (installed from Debian).
+This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). librespot is MIT licensed, ffmpeg is LGPL/GPL (installed from Debian).
