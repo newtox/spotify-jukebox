@@ -54,6 +54,8 @@ If SinusBot runs with `network_mode: host` on the same machine, add `http://127.
 station and play it. The bot plays the music in its channel. If SinusBot runs in its own Docker network instead,
 put the jukebox in that network and use `http://jukebox:8000/stream`.
 
+To show the current song as the bot's nickname, install the [Jukebox Nick](integrations/sinusbot/README.md) plugin.
+
 ### WorkAdventure
 
 The stream has to be reachable from the browser, so put it behind your reverse proxy with a hard-to-guess
