@@ -31,6 +31,8 @@ VOLUME_CTRL = os.environ.get("VOLUME_CTRL", "log")
 # For tests: any command that writes 44.1 kHz stereo s16le PCM to stdout.
 LIBRESPOT_CMD = os.environ.get("LIBRESPOT_CMD")
 CREDENTIALS = os.path.join(DATA, "credentials.json")
+NOW_PLAYING = "/tmp/jukebox-now-playing"
+ICY_METAINT = 16000
 F_SETPIPE_SZ = 1031
 
 RATE, CHANNELS, SAMPLE_BYTES = 44100, 2, 2
@@ -59,7 +61,51 @@ def librespot_cmd():
         "librespot", "--name", NAME, "--backend", "pipe", "--bitrate", SPOTIFY_BITRATE,
         "--cache", DATA, "--system-cache", DATA, "--disable-audio-cache", "--disable-discovery",
         "--initial-volume", INITIAL_VOLUME, "--volume-ctrl", VOLUME_CTRL, "--enable-volume-normalisation",
+        "--onevent", f"{sys.executable} {os.path.abspath(__file__)} --event",
     ]
+
+
+def set_now_playing(title):
+    tmp = NOW_PLAYING + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(title)
+    os.replace(tmp, NOW_PLAYING)
+
+
+def handle_event():
+    event = os.environ.get("PLAYER_EVENT")
+    if event == "track_changed":
+        artists = ", ".join(a for a in os.environ.get("ARTISTS", "").split("\n") if a)
+        artists = artists or os.environ.get("SHOW_NAME", "")
+        name = os.environ.get("NAME", "")
+        set_now_playing(f"{artists} - {name}" if artists and name else name or artists)
+    elif event == "stopped":
+        set_now_playing("")
+
+
+now_playing_cache = {"mtime": None, "title": ""}
+
+
+def now_playing():
+    try:
+        mtime = os.stat(NOW_PLAYING).st_mtime_ns
+    except OSError:
+        return ""
+    if mtime != now_playing_cache["mtime"]:
+        try:
+            with open(NOW_PLAYING, encoding="utf-8") as f:
+                now_playing_cache["title"] = f.read().strip()
+        except OSError:
+            return now_playing_cache["title"]
+        now_playing_cache["mtime"] = mtime
+    return now_playing_cache["title"]
+
+
+def icy_block(title):
+    text = (title or NAME).replace("'", "\u2019")
+    payload = f"StreamTitle='{text}';".encode("utf-8")[:255 * 16]
+    length = -(-len(payload) // 16)
+    return bytes([length]) + payload.ljust(length * 16, b"\0")
 
 
 def login_running() -> bool:
@@ -92,6 +138,8 @@ def run_librespot():
             while login_running():
                 time.sleep(2)
             time.sleep(3)
+        if not LIBRESPOT_CMD:
+            set_now_playing("")
         log("starting librespot as", repr(NAME))
         proc = subprocess.Popen(librespot_cmd(), stdout=subprocess.PIPE, stdin=subprocess.DEVNULL)
         try:                                       # small pipe: librespot may only be ~25 ms ahead of us
@@ -209,8 +257,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "audio/mpeg")
         self.send_header("icy-name", NAME)
+        icy = self.headers.get("Icy-MetaData") == "1"
+        if icy:
+            self.send_header("icy-metaint", str(ICY_METAINT))
         self._cors()
         self.end_headers()
+        until_meta = ICY_METAINT
+        sent_title = None
         q: queue.Queue = queue.Queue(maxsize=256)
         with listeners_lock:
             listeners.add(q)
@@ -221,7 +274,18 @@ class Handler(BaseHTTPRequestHandler):
                     data = q.get(timeout=10)
                 except queue.Empty:
                     break
-                self.wfile.write(data)
+                if not icy:
+                    self.wfile.write(data)
+                    continue
+                while data:
+                    part, data = data[:until_meta], data[until_meta:]
+                    self.wfile.write(part)
+                    until_meta -= len(part)
+                    if until_meta == 0:
+                        title = now_playing()
+                        self.wfile.write(icy_block(title) if title != sent_title else b"\0")
+                        sent_title = title
+                        until_meta = ICY_METAINT
         except (BrokenPipeError, ConnectionResetError):
             pass
         finally:
@@ -231,6 +295,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if sys.argv[1:] == ["--event"]:
+        handle_event()
+        return
     os.makedirs(DATA, exist_ok=True)
     ff = encoder()
     threading.Thread(target=run_librespot, daemon=True).start()

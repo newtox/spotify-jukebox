@@ -10,6 +10,7 @@ Spotify app ──(Connect)──▶ librespot ──PCM──▶ pacer ──�
 
 - The stream never breaks off: while nothing plays, listeners get silence, and the music comes back as soon as you press play.
 - A few seconds behind the app, like a radio: the jukebox itself adds well under a second, the rest is the player's buffer.
+- Players that ask for ICY metadata (radio players, SinusBot) get the current song as the stream title.
 - Needs a **Spotify Premium** account (librespot only works with Premium).
 
 Note: Spotify's terms don't allow rebroadcasting its music. Keep the stream private (bound to localhost or a
