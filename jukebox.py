@@ -37,6 +37,7 @@ F_SETPIPE_SZ = 1031
 
 RATE, CHANNELS, SAMPLE_BYTES = 44100, 2, 2
 BYTES_PER_SEC = RATE * CHANNELS * SAMPLE_BYTES
+FRAME = CHANNELS * SAMPLE_BYTES
 TICK = 0.02                                        # 20 ms of audio per step
 CHUNK = int(BYTES_PER_SEC * TICK) // 4 * 4
 BUFFER_MAX = int(BYTES_PER_SEC * 0.3) // 4 * 4     # at most 300 ms ahead, so pause/skip react quickly
@@ -181,9 +182,10 @@ def pace(ff):
             if playing and len(pcm) >= CHUNK:
                 out = bytes(pcm[:CHUNK])
                 del pcm[:CHUNK]
-            elif playing and pcm:
-                out = bytes(pcm) + bytes(CHUNK - len(pcm))
-                pcm.clear()
+            elif playing and len(pcm) >= FRAME:
+                whole = len(pcm) // FRAME * FRAME
+                out = bytes(pcm[:whole]) + bytes(CHUNK - whole)
+                del pcm[:whole]
                 playing = False
             else:
                 out = SILENCE
