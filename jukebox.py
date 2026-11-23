@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-WA Jukebox: a Spotify Connect speaker (librespot) whose sound is streamed as MP3 over HTTP,
-so that a jukebox in WorkAdventure can play it ("play audio" property with the stream URL).
+Spotify Jukebox: a Spotify Connect speaker (librespot) whose sound is streamed as MP3 over HTTP,
+so that anything that plays a stream URL can play it (a TeamSpeak music bot, a WorkAdventure area, a browser).
 
     librespot (raw PCM) -> pacer (real time, silence while nothing plays) -> ffmpeg (MP3) -> HTTP listeners
 
@@ -19,7 +19,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DATA = os.environ.get("DATA_DIR", "/data")
-NAME = os.environ.get("DEVICE_NAME", "WorkAdventure Jukebox")
+NAME = os.environ.get("DEVICE_NAME", "Jukebox")
 STREAM_PATH = "/" + os.environ.get("STREAM_PATH", "stream").strip("/")
 PORT = int(os.environ.get("PORT", "8000"))
 MP3_BITRATE = os.environ.get("MP3_BITRATE", "192k")

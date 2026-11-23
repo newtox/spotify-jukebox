@@ -1,39 +1,62 @@
-# wa-jukebox
+# spotify-jukebox
 
-A Spotify Connect speaker for WorkAdventure. It shows up in your Spotify app as a device ("WorkAdventure Jukebox");
-whatever you play on it is streamed as MP3 over HTTP, so an area or a jukebox in WorkAdventure can play it for everyone
-standing nearby. Like a jam session: one person with Spotify Premium picks the music, everyone hears it.
+A Spotify Connect speaker that streams what it plays as MP3 over HTTP. It shows up in your Spotify app as a device
+("Jukebox"); anything that can play a stream URL can play it for everyone listening: a TeamSpeak music bot, an area
+in WorkAdventure, a browser. Like a jam session: one person with Spotify Premium picks the music, everyone hears it.
 
 ```
-Spotify app ──(Connect)──▶ librespot ──PCM──▶ pacer ──▶ ffmpeg (MP3) ──HTTP──▶ WorkAdventure players
+Spotify app ──(Connect)──▶ librespot ──PCM──▶ pacer ──▶ ffmpeg (MP3) ──HTTP──▶ listeners
 ```
 
 - The stream never breaks off: while nothing plays, listeners get silence, and the music comes back as soon as you press play.
-- A few seconds behind the app, like a radio: the jukebox itself adds well under a second, the rest is the browser's buffer.
+- A few seconds behind the app, like a radio: the jukebox itself adds well under a second, the rest is the player's buffer.
 - Needs a **Spotify Premium** account (librespot only works with Premium).
 
-Note: Spotify's terms don't allow rebroadcasting its music. Keep the stream private (a hard-to-guess `STREAM_PATH`) and
-for a few friends only.
+Note: Spotify's terms don't allow rebroadcasting its music. Keep the stream private (bound to localhost or a
+hard-to-guess `STREAM_PATH`) and for a few friends only.
 
 ## Running
 
 ```yaml
 services:
   jukebox:
-    image: ghcr.io/newtox/wa-jukebox:latest
-    container_name: wa-jukebox
+    image: ghcr.io/newtox/spotify-jukebox:latest
+    container_name: jukebox
     restart: unless-stopped
     environment:
-      DEVICE_NAME: "WorkAdventure Jukebox"
-      STREAM_PATH: "<random, e.g. from: openssl rand -hex 12>"
+      DEVICE_NAME: "Jukebox"
+      STREAM_PATH: "stream"
       INITIAL_VOLUME: "80"
     ports:
       - "127.0.0.1:8099:8000"
     volumes:
-      - /docker_volumes/wa-jukebox:/data
+      - /docker_volumes/jukebox:/data
 ```
 
-Reverse proxy (Caddy), inside the WorkAdventure site block, so no extra domain is needed:
+The stream is then at `http://127.0.0.1:8099/stream` on the host.
+
+### Logging in to Spotify (once)
+
+```sh
+docker exec -it jukebox jukebox-login
+```
+
+Open the printed link, log in with the Premium account, then copy the address of the page that fails to load
+(`http://127.0.0.1/login?code=...`) back into the terminal. When it says "Authenticated", press Ctrl+C.
+The login is saved in `/data`; the jukebox starts by itself a few seconds later.
+
+Then pick the jukebox as the device in Spotify.
+
+### TeamSpeak (SinusBot)
+
+If SinusBot runs with `network_mode: host` on the same machine, add `http://127.0.0.1:8099/stream` as a radio
+station and play it. The bot plays the music in its channel. If SinusBot runs in its own Docker network instead,
+put the jukebox in that network and use `http://jukebox:8000/stream`.
+
+### WorkAdventure
+
+The stream has to be reachable from the browser, so put it behind your reverse proxy with a hard-to-guess
+`STREAM_PATH`. With Caddy, inside the WorkAdventure site block:
 
 ```
 handle_path /jukebox/* {
@@ -41,28 +64,14 @@ handle_path /jukebox/* {
 }
 ```
 
-The stream is then at `https://<your WorkAdventure domain>/jukebox/<STREAM_PATH>`.
-
-### Logging in to Spotify (once)
-
-```sh
-docker exec -it wa-jukebox jukebox-login
-```
-
-Open the printed link, log in with the Premium account, then copy the address of the page that fails to load
-(`http://127.0.0.1/login?code=...`) back into the terminal. When it says "Authenticated", press Ctrl+C.
-The login is saved in `/data`; the jukebox starts by itself a few seconds later.
-
-### In WorkAdventure
-
-Map editor → draw an area around the jukebox → property **Play audio file** → the stream URL.
-Everyone who walks in hears the music, walking out stops it. Then pick "WorkAdventure Jukebox" as the device in Spotify.
+Map editor → draw an area around the jukebox → property **Play audio file** →
+`https://<your WorkAdventure domain>/jukebox/<STREAM_PATH>`. Everyone who walks in hears the music, walking out stops it.
 
 ## Settings
 
 | Variable | Default | |
 |---|---|---|
-| `DEVICE_NAME` | `WorkAdventure Jukebox` | Name in the Spotify device list |
+| `DEVICE_NAME` | `Jukebox` | Name in the Spotify device list |
 | `STREAM_PATH` | `stream` | Path of the stream; make it hard to guess |
 | `MP3_BITRATE` | `192k` | Bitrate of the stream |
 | `SPOTIFY_BITRATE` | `320` | Quality fetched from Spotify (96, 160, 320) |
